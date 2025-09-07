@@ -1,213 +1,133 @@
-<!DOCTYPE html>
-<html lang="de">
-<head>
-  <meta charset="UTF-8">
-  <title>Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-  <link rel="icon" href="/static/favicon.ico">
-  <style>
-    body{background:#f1f5f9;}
-    .card-custom{border-radius:14px;border:none;box-shadow:0 4px 10px rgba(0,0,0,0.04);}
-    .card-header-custom{background:#2563eb;color:#fff;border-radius:14px 14px 0 0;}
-    .chart-box{background:#fff;padding:20px;border-radius:14px;box-shadow:0 3px 8px rgba(0,0,0,0.04);margin-bottom:30px;}
-    .chart-box canvas{max-height:420px;}
-  </style>
-</head>
-<body>
-<div class="container py-4">
+@app.route("/dashboard")
+def dashboard():
+    import pandas as pd
+    import calendar
 
-  <!-- HEADER -->
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4 class="fw-semibold mb-0">Dashboard</h4>
-    <div class="d-flex align-items-center">
-      <span class="text-muted me-3">👤 {{ user }}</span>
-      <a href="/form" class="btn btn-outline-primary btn-sm me-2">Tagesumsatz erfassen</a>
-      <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
-    </div>
-  </div>
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
 
-  <!-- FILTER -->
-  <form class="row gy-2 gx-3 align-items-end mb-4" method="get" action="/dashboard">
-    <div class="col-6 col-md-3">
-      <label class="form-label">Jahr</label>
-      <select class="form-select" name="jahr" onchange="this.form.submit()">
-        {% for j in jahre %}
-          <option value="{{ j }}" {% if jahr_selected == j %}selected{% endif %}>{{ j }}</option>
-        {% endfor %}
-      </select>
-    </div>
+    user = session.get("user")
+    role = session.get("role")
 
-    <div class="col-6 col-md-3">
-      <label class="form-label">Zeitraum</label>
-      <select class="form-select" name="filter" onchange="this.form.submit()">
-        <option value="monat"     {% if filter=='monat' %}selected{% endif %}>Aktueller Monat</option>
-        <option value="jahres"    {% if filter=='jahres' %}selected{% endif %}>Laufendes Jahr</option>
-        <option value="quartal1"  {% if filter=='quartal1' %}selected{% endif %}>1. Quartal</option>
-        <option value="quartal2"  {% if filter=='quartal2' %}selected{% endif %}>2. Quartal</option>
-        <option value="quartal3"  {% if filter=='quartal3' %}selected{% endif %}>3. Quartal</option>
-        <option value="quartal4"  {% if filter=='quartal4' %}selected{% endif %}>4. Quartal</option>
-        <option value="custom"    {% if filter=='custom' %}selected{% endif %}>Benutzerdefiniert</option>
-      </select>
-    </div>
+    # -------------------- Filter/Zeitraum einlesen -------------------------
+    filter_typ = request.args.get("filter") or "monat"
+    jahr_str   = request.args.get("jahr")   or datetime.now().strftime("%Y")
+    monat_str  = request.args.get("monat")  or datetime.now().strftime("%m")
 
-    {% if filter=='monat' %}
-    <div class="col-6 col-md-3">
-      <label class="form-label">Monat</label>
-      <select class="form-select" name="monat" onchange="this.form.submit()">
-        {% set monate = ['01','02','03','04','05','06','07','08','09','10','11','12'] %}
-        {% for m in monate %}
-          <option value="{{ m }}" {% if request.args.get('monat', '') == m %}selected{% endif %}>{{ m }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    {% endif %}
+    # Integer-Varianten für Berechnungen
+    try:
+        jahr_int  = int(jahr_str)
+    except Exception:
+        jahr_int  = datetime.now().year
+        jahr_str  = str(jahr_int)
 
-    {% if filter=='custom' %}
-    <div class="col-6 col-md-3">
-      <label class="form-label">Von</label>
-      <input type="date" name="start" class="form-control"
-             value="{{ start | replace('.', '-') | tojson | safe | trim('\"') if '-' in start else start }}">
-    </div>
-    <div class="col-6 col-md-3">
-      <label class="form-label">Bis</label>
-      <input type="date" name="end" class="form-control"
-             value="{{ end | replace('.', '-') | tojson | safe | trim('\"') if '-' in end else end }}">
-    </div>
-    <div class="col-12 mt-2">
-      <button class="btn btn-primary" type="submit">Filtern</button>
-    </div>
-    {% endif %}
-  </form>
+    try:
+        monat_int = int(monat_str)
+    except Exception:
+        monat_int = datetime.now().month
+        monat_str = f"{monat_int:02d}"
 
-  <!-- STATISTIK KARTEN -->
-  <div class="row gy-4">
-    {% for row in stats %}
-      <div class="col-sm-6 col-md-4">
-        <div class="card card-custom h-100">
-          <div class="card-header card-header-custom">{{ row[0] }}</div>
-          <div class="card-body">
-            <strong>Umsatz:</strong>
-            <span class="amount-chf" data-amount="{{ '%.2f'|format(row[1]) }}">
-              CHF {{ '%.2f'|format(row[1]) }}
-            </span>
-          </div>
-        </div>
-      </div>
-    {% endfor %}
-    <div class="col-12">
-      <div class="alert alert-success mt-3">
-        <strong>Gesamtumsatz:&nbsp;
-          <span class="amount-chf" data-amount="{{ '%.2f'|format(gesamt) }}">
-            CHF {{ '%.2f'|format(gesamt) }}
-          </span>
-        </strong>
-      </div>
-    </div>
-  </div>
+    # Hilfsfunktion: letzten Tag eines Monats bestimmen
+    def _last_day_of_month(year_int: int, month_int: int) -> int:
+        return calendar.monthrange(year_int, month_int)[1]
 
-  {% if session.get('role') == 'super' %}
-    <!-- LETZTE EINTRÄGE -->
-    <div class="chart-box">
-      <h6>Letzte Schichteingaben</h6>
-      <div class="table-responsive">
-        <table class="table table-sm align-middle">
-          <thead>
-            <tr><th>Restaurant</th><th>Datum</th><th class="text-end">Betrag [CHF]</th></tr>
-          </thead>
-          <tbody>
-            {% for r,d,b in last_entries %}
-              <tr>
-                <td>{{ r }}</td>
-                <td>{{ d }}</td>
-                <td class="text-end amount-chf" data-amount="{{ '%.2f'|format(b) }}">CHF {{ '%.2f'|format(b) }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    # Start/End als Strings im Format DD.MM.YYYY vorbereiten
+    if filter_typ == "monat":
+        last_day = _last_day_of_month(jahr_int, monat_int)
+        start = f"01.{monat_int:02d}.{jahr_int}"
+        end   = f"{last_day:02d}.{monat_int:02d}.{jahr_int}"
+    elif filter_typ == "jahres":
+        start, end = f"01.01.{jahr_int}", f"31.12.{jahr_int}"
+    elif filter_typ == "quartal1":
+        start, end = f"01.01.{jahr_int}", f"31.03.{jahr_int}"
+    elif filter_typ == "quartal2":
+        start, end = f"01.04.{jahr_int}", f"30.06.{jahr_int}"
+    elif filter_typ == "quartal3":
+        start, end = f"01.07.{jahr_int}", f"30.09.{jahr_int}"
+    elif filter_typ == "quartal4":
+        start, end = f"01.10.{jahr_int}", f"31.12.{jahr_int}"
+    elif filter_typ == "custom":
+        start = request.args.get("start") or datetime.now().strftime("%d.%m.%Y")
+        end   = request.args.get("end")   or datetime.now().strftime("%d.%m.%Y")
+    else:
+        # Unbekannter Filter → sicherer Fallback (aktueller Monat)
+        last_day = _last_day_of_month(datetime.now().year, datetime.now().month)
+        start = f"01.{datetime.now().month:02d}.{datetime.now().year}"
+        end   = f"{last_day:02d}.{datetime.now().month:02d}.{datetime.now().year}"
+        filter_typ = "monat"
+        jahr_int   = datetime.now().year
+        jahr_str   = str(jahr_int)
+        monat_int  = datetime.now().month
+        monat_str  = f"{monat_int:02d}"
 
-    <!-- BAR -->
-    <div class="chart-box">
-      <h6 class="mb-3">Jahresumsatz {{ jahr_selected }}</h6>
-      <canvas id="barChart"></canvas>
-    </div>
+    # -------------------- Daten laden & parsen -----------------------------
+    conn = sqlite3.connect(DB_FILE)
+    df = pd.read_sql_query("SELECT * FROM umsatz", conn)
+    conn.close()
 
-    <!-- LINE -->
-    <div class="chart-box">
-      <h6 class="mb-3">Monatsentwicklung {{ jahr_selected }}</h6>
-      <canvas id="lineChart"></canvas>
-    </div>
-  {% endif %}
+    # Datumsspalte robust parsen; ungültige Zeilen verwerfen
+    df["Datum"] = pd.to_datetime(df["datum"], format="%d.%m.%Y", errors="coerce")
+    df = df.dropna(subset=["Datum"])
 
-</div>
+    # Start/End EINMAL robust parsen + Fallback auf Monatsrange bei Fehlern
+    start_dt = pd.to_datetime(start, dayfirst=True, errors="coerce")
+    end_dt   = pd.to_datetime(end,   dayfirst=True, errors="coerce")
+    if pd.isna(start_dt) or pd.isna(end_dt) or end_dt < start_dt:
+        last_day = _last_day_of_month(jahr_int, monat_int)
+        start_dt = pd.to_datetime(f"01.{monat_int:02d}.{jahr_int}", dayfirst=True)
+        end_dt   = pd.to_datetime(f"{last_day:02d}.{monat_int:02d}.{jahr_int}", dayfirst=True)
+        # Strings konsistent für das Template aktualisieren
+        start     = start_dt.strftime("%d.%m.%Y")
+        end       = end_dt.strftime("%d.%m.%Y")
+        filter_typ = "monat"
 
-{% if session.get('role') == 'super' %}
-<script defer>
-document.addEventListener('DOMContentLoaded', function () {
-  // CHF-Formatierung clientseitig vereinheitlichen
-  const chf = new Intl.NumberFormat('de-CH', { style: 'currency', currency: 'CHF', maximumFractionDigits: 2 });
-  document.querySelectorAll('.amount-chf').forEach(el => {
-    const v = Number(el.getAttribute('data-amount'));
-    if (!Number.isNaN(v)) el.textContent = chf.format(v);
-  });
+    # -------------------- Auswertungen -------------------------------------
+    stats = []
+    last_entries = []
+    monthly = {r: [0.0]*12 for r in RESTAURANTS}
 
-  // Daten aus Jinja sicher in JS (tojson!)
-  const labelsBar = {{ (stats | map(attribute=0) | list) | tojson }};
-  const dataBar   = {{ (stats | map(attribute=1) | list) | tojson }};
-  const months    = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
-  const monatData = {{ monthly | tojson }};
-  const farben    = ["#2563eb","#16a34a","#cc5800","#db2777","#475569","#0ea5e9","#22c55e"];
+    for r in RESTAURANTS:
+        # Input-User sehen nur ihr fix zugewiesenes Restaurant
+        if role == "input" and session.get("restaurant") != r:
+            continue
 
-  // Bar-Chart: Umsatz nach Restaurant
-  new Chart(document.getElementById('barChart'), {
-    type: 'bar',
-    data: { labels: labelsBar,
-      datasets: [{ data: dataBar, backgroundColor: '#38a169' }] },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      indexAxis: 'y',
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: { label: ctx => chf.format(ctx.parsed.x ?? ctx.parsed.y) }
-        }
-      },
-      scales: {
-        x: { ticks: { callback: v => chf.format(v) } }
-      }
-    }
-  });
+        df_r = df[df["restaurant"] == r]
 
-  // Line-Chart: Monatsentwicklung pro Restaurant
-  const ds = [];
-  let i = 0;
-  for (const r in monatData) {
-    ds.push({
-      label: r,
-      data: monatData[r],
-      borderColor: farben[i % farben.length],
-      pointRadius: 2,
-      fill: false,
-      tension: 0.25
-    });
-    i++;
-  }
-  new Chart(document.getElementById('lineChart'), {
-    type: 'line',
-    data: { labels: months, datasets: ds },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom' } },
-      scales: { y: { ticks: { callback: v => chf.format(v) } } }
-    }
-  });
-});
-</script>
-{% endif %}
-</body>
-</html>
+        # Zeitraum-Summe mit vorgeparsten Grenzen
+        dfF = df_r[df_r["Datum"].between(start_dt, end_dt, inclusive="both")]
+        total_summe = round(float(dfF["total"].sum()), 2) if not dfF.empty else 0.0
+        stats.append([r, total_summe])
+
+        # letzter Eintrag je Restaurant
+        if not df_r.empty:
+            l = df_r.sort_values("Datum", ascending=False).iloc[0]
+            last_entries.append((r, l["datum"], float(l["total"])))
+        else:
+            last_entries.append((r, "-", 0.0))
+
+        # Monatsentwicklung fürs ausgewählte Jahr
+        for m in range(1, 13):
+            last_day_m = _last_day_of_month(jahr_int, m)
+            st = pd.to_datetime(f"01.{m:02d}.{jahr_int}", dayfirst=True)
+            en = pd.to_datetime(f"{last_day_m:02d}.{m:02d}.{jahr_int}", dayfirst=True)
+            sub = df_r[df_r["Datum"].between(st, en, inclusive="both")]
+            monthly[r][m-1] = round(float(sub["total"].sum()), 2) if not sub.empty else 0.0
+
+    gesamt = round(sum(row[1] for row in stats), 2)
+    jahresliste = [str(y) for y in range(2023, 2031)]
+
+    # -------------------- Render -------------------------------------------
+    return render_template(
+        "dashboard.html",
+        stats=stats,
+        gesamt=gesamt,
+        year=jahr_str,
+        filter=filter_typ,
+        jahre=jahresliste,
+        jahr_selected=jahr_str,
+        start=start,
+        end=end,
+        user=user,
+        last_entries=last_entries,
+        monthly=monthly
+    )
