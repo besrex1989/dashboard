@@ -1,46 +1,21 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de" class="h-100">
 <head>
   <meta charset="UTF-8">
   <title>Schichtumsatz erfassen</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="icon" href="/static/favicon.ico">
   <style>
     body{background:#f1f5f9;}
     .card-custom{border-radius:14px;border:none;box-shadow:0 4px 10px rgba(0,0,0,0.05);}
     .title{font-weight:600;font-size:1.25rem;}
+    .rest-ok{color:#16a34a;font-weight:600;}
+    .rest-bad{color:#dc2626;font-weight:600;}
+    .muted{color:#64748b;}
   </style>
-  <script>
-    function updateTotal(){
-      let ids=['küche','wein','bier','mineral','heissgetränke','spirituosen','patisserie','anderes'];
-      let t=0; ids.forEach(f=>{t+=parseFloat(document.getElementsByName(f)[0].value)||0;});
-      document.getElementById('totalDisplay').innerText=t.toFixed(2);
-      document.getElementById('totalHidden').value = t.toFixed(2);   // <-- Wert ans Backend senden
-      updateRest();
-    }
-    function updateRest(){
-      let total=parseFloat(document.getElementById('totalDisplay').innerText)||0;
-      let pays=['bar','kartenterminal','twint','amex','debitoren','eatch','reka','sonstige'];
-      let s=0; pays.forEach(p=>{s+=parseFloat(document.getElementsByName(p)[0].value)||0;});
-      document.getElementById('restDisplay').innerText=(total-s).toFixed(2);
-    }
-    function checkSubmit(){
-      const rest=parseFloat(document.getElementById('restDisplay').innerText);
-      if(rest !== 0){
-        alert("Bitte Zahlungsarten korrekt verteilen – Rest "+rest+" CHF");
-        return false;
-      }
-      return true;
-    }
-    function addFotoField(){
-      const d=document.getElementById('foto-container');
-      const input=document.createElement('input');
-      input.type="file"; input.name="fotos"; input.accept="image/*";
-      input.className="form-control mt-2";
-      d.appendChild(input);
-    }
-  </script>
 </head>
-<body>
+<body class="h-100">
 <div class="container py-4" style="max-width:700px;">
 
   <div class="d-flex justify-content-between align-items-center mb-3">
@@ -50,19 +25,30 @@
 
   <div class="card card-custom p-4">
     <div class="title mb-3">Schichtumsatz erfassen</div>
-    <form method="post" enctype="multipart/form-data" onsubmit="return checkSubmit()" action="/form">
+
+    <form method="post" enctype="multipart/form-data" action="/form" id="umsatzForm" novalidate>
+      <!-- Restaurant -->
       <div class="mb-3">
-        <label>Restaurant</label>
-        <select name="restaurant" class="form-select">
-         {% for r in restaurants %}<option>{{r}}</option>{% endfor %}
+        <label class="form-label" for="restaurant">Restaurant</label>
+        <select id="restaurant" name="restaurant" class="form-select" required>
+          {% for r in restaurants %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
         </select>
+        <div class="invalid-feedback">Bitte Restaurant auswählen.</div>
       </div>
 
-      <div class="row g-2 mb-2">
-        {% for n in ['küche','wein','bier','mineral','heissgetränke','spirituosen','patisserie','anderes'] %}
+      <!-- Umsatzkategorien -->
+      <div class="row g-2 mb-2" id="cat-fields">
+        <!-- Hinweis: Feldnamen ohne Umlaute, um Edge-Cases zu vermeiden -->
+        {% set categories = [
+          ('kueche','Küche'), ('wein','Wein'), ('bier','Bier'), ('mineral','Mineral'),
+          ('heissgetraenke','Heissgetränke'), ('spirituosen','Spirituosen'),
+          ('patisserie','Patisserie'), ('anderes','Anderes')
+        ] %}
+        {% for key,label in categories %}
         <div class="col-6">
-          <label class="form-label text-capitalize">{{n}}</label>
-          <input type="number" step="0.01" name="{{n}}" class="form-control" oninput="updateTotal()">
+          <label class="form-label" for="cat-{{ key }}">{{ label }}</label>
+          <input id="cat-{{ key }}" type="number" step="0.01" min="0" inputmode="decimal" lang="de-CH"
+                 name="{{ key }}" class="form-control cat-input" placeholder="0.00" value="">
         </div>
         {% endfor %}
       </div>
@@ -70,31 +56,128 @@
       <!-- Hidden total for backend -->
       <input type="hidden" name="total" id="totalHidden" value="0.00">
 
-      <div class="mb-2"><strong>Total-Umsatz:</strong> <span id="totalDisplay">0.00</span> CHF
-        &nbsp; <small class="text-muted">(Rest: <span id="restDisplay">0.00</span> CHF)</small>
+      <div class="mb-2">
+        <strong>Total-Umsatz:</strong>
+        <span id="totalDisplay">0.00</span> CHF
+        <span class="muted">&nbsp;•&nbsp;Rest: <span id="restDisplay" class="rest-bad">0.00</span> CHF</span>
       </div>
 
-      <div class="row g-2 mb-2">
-        <div class="col-6"><label>Bar</label><input type="number" step="0.01" name="bar" class="form-control" oninput="updateRest()"></div>
-        <div class="col-6"><label>Kartenterminal</label><input type="number" step="0.01" name="kartenterminal" class="form-control" oninput="updateRest()"></div>
-        <div class="col-6"><label>Twint</label><input type="number" step="0.01" name="twint" class="form-control" oninput="updateRest()"></div>
-        <div class="col-6"><label>Amex</label><input type="number" step="0.01" name="amex" class="form-control" oninput="updateRest()"></div>
-        <div class="col-6"><label>Debitoren</label><input type="number" step="0.01" name="debitoren" class="form-control" oninput="updateRest()"></div>
-        <div class="col-6"><label>Eatch</label><input type="number" step="0.01" name="eatch" class="form-control" oninput="updateRest()"></div>
-        <div class="col-6"><label>Reka</label><input type="number" step="0.01" name="reka" class="form-control" oninput="updateRest()"></div>
-        <div class="col-6"><label>Sonstige</label><input type="number" step="0.01" name="sonstige" class="form-control" oninput="updateRest()"></div>
+      <!-- Zahlungsarten -->
+      <div class="row g-2 mb-2" id="pay-fields">
+        {% set payments = [
+          ('bar','Bar'), ('kartenterminal','Kartenterminal'), ('twint','Twint'),
+          ('amex','Amex'), ('debitoren','Debitoren'), ('eatch','Eatch'),
+          ('reka','Reka'), ('sonstige','Sonstige')
+        ] %}
+        {% for key,label in payments %}
+        <div class="col-6">
+          <label class="form-label" for="pay-{{ key }}">{{ label }}</label>
+          <input id="pay-{{ key }}" type="number" step="0.01" min="0" inputmode="decimal" lang="de-CH"
+                 name="{{ key }}" class="form-control pay-input" placeholder="0.00" value="">
+        </div>
+        {% endfor %}
       </div>
 
-      <label class="mt-2">Fotos (optional)</label>
-      <div id="foto-container">
-        <input type="file" name="fotos" class="form-control mb-2" accept="image/*">
+      <!-- Fotos -->
+      <label class="mt-2 form-label">Fotos (optional)</label>
+      <div id="foto-container" class="mb-2">
+        <input type="file" name="fotos[]" class="form-control" accept="image/*" multiple>
       </div>
-      <button type="button" class="btn btn-link p-0" onclick="addFotoField()">Weiteres Foto hinzufügen</button>
 
-      <button type="submit" class="btn btn-primary w-100 mt-3">Speichern</button>
+      <button type="submit" id="submitBtn" class="btn btn-primary w-100 mt-2" disabled>Speichern</button>
+      <div class="form-text mt-2">
+        Hinweis: Negative Beträge sind nicht zulässig. Dezimaltrennzeichen werden automatisch normalisiert (Komma/Punkt).
+      </div>
     </form>
   </div>
 
 </div>
+
+<script>
+  // Hilfsfunktionen
+  function norm(x){
+    if (typeof x !== 'string') x = String(x ?? '');
+    x = x.trim().replace(',', '.'); // de-CH: Komma -> Punkt
+    const v = parseFloat(x);
+    return Number.isFinite(v) ? v : 0;
+  }
+
+  function fmt(v){
+    return (Math.round((v + Number.EPSILON) * 100) / 100).toFixed(2);
+  }
+
+  function sumNodeList(nodeList){
+    let s = 0;
+    nodeList.forEach(el => { s += norm(el.value); });
+    return s;
+  }
+
+  const catInputs = document.querySelectorAll('.cat-input');
+  const payInputs = document.querySelectorAll('.pay-input');
+  const totalDisplay = document.getElementById('totalDisplay');
+  const restDisplay  = document.getElementById('restDisplay');
+  const totalHidden  = document.getElementById('totalHidden');
+  const submitBtn    = document.getElementById('submitBtn');
+  const form         = document.getElementById('umsatzForm');
+
+  function updateTotals(){
+    // Kategorien summieren → Total
+    const total = sumNodeList(catInputs);
+    totalDisplay.textContent = fmt(total);
+    totalHidden.value = fmt(total);
+
+    // Zahlarten-Summe
+    const pays = sumNodeList(payInputs);
+    const rest = total - pays;
+
+    restDisplay.textContent = fmt(rest);
+
+    // Farbliche Rückmeldung + Submit-Enable
+    const ok = Math.abs(rest) < 0.005; // 0.01-Cent-Rounding-Toleranz
+    restDisplay.classList.toggle('rest-ok', ok);
+    restDisplay.classList.toggle('rest-bad', !ok);
+
+    // Validierung Restaurant
+    const restaurantValid = document.getElementById('restaurant').value?.trim().length > 0;
+
+    submitBtn.disabled = !(ok && restaurantValid);
+  }
+
+  // Eingaben beobachten (inkl. Normalisierung)
+  function attachListeners(nodelist){
+    nodelist.forEach(el => {
+      el.addEventListener('input', (e) => {
+        // Komma → Punkt on-the-fly (nur visuell, Browser verwaltet value)
+        const cur = e.target.value;
+        if (cur.includes(',')) e.target.value = cur.replace(',', '.');
+        // Grenzen
+        if (norm(e.target.value) < 0){ e.target.value = '0.00'; }
+        updateTotals();
+      });
+      el.addEventListener('blur', (e) => {
+        e.target.value = fmt(norm(e.target.value));
+        updateTotals();
+      });
+    });
+  }
+
+  attachListeners(catInputs);
+  attachListeners(payInputs);
+  document.getElementById('restaurant').addEventListener('change', updateTotals);
+
+  // Native HTML5-Validierung elegant nutzen
+  form.addEventListener('submit', function(e){
+    // Zusätzliche Sicherheitsprüfung clientseitig
+    const rest = norm(restDisplay.textContent);
+    if (Math.abs(rest) >= 0.005){
+      e.preventDefault();
+      alert("Bitte Zahlungsarten korrekt verteilen – Rest " + fmt(rest) + " CHF.");
+      return false;
+    }
+  });
+
+  // Initial
+  updateTotals();
+</script>
 </body>
 </html>
