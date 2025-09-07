@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body{background:#f1f5f9;}
+    .card-custom{border-radius:14px;border:none;box-shadow:0 4px 10px rgba(0,0,0,0.04);}
+    .card-header-custom{background:#2563eb;color:#fff;border-radius:14px 14px 0 0;}
+    .chart-box{background:#fff;padding:20px;border-radius:14px;box-shadow:0 3px 8px rgba(0,0,0,0.04);margin-bottom:30px;}
+  </style>
+</head>
+<body>
+<div class="container py-4">
+
+  <!-- HEADER -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="fw-semibold">Dashboard</h4>
+    <div>
+      <span class="text-muted me-3">👤 {{user}}</span>
+      <a href="/form" class="btn btn-outline-primary btn-sm me-2">Tagesumsatz erfassen</a>
+      <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
+    </div>
+  </div>
+
+  <!-- FILTER -->
+  <form class="row gy-2 gx-3 align-items-end mb-4" method="get" action="/dashboard">
+    <div class="col-md-3"><label>Jahr</label>
+      <select class="form-select" name="jahr">
+        {% for j in jahre %}
+        <option value="{{j}}" {% if jahr_selected == j %}selected{% endif %}>{{j}}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label>Zeitraum</label>
+      <select class="form-select" name="filter" onchange="this.form.submit()">
+        <option value="monat"     {% if filter=='monat' %}selected{% endif %}>Aktueller Monat</option>
+        <option value="jahres"    {% if filter=='jahres' %}selected{% endif %}>Laufendes Jahr</option>
+        <option value="quartal1"  {% if filter=='quartal1' %}selected{% endif %}>1. Quartal</option>
+        <option value="quartal2"  {% if filter=='quartal2' %}selected{% endif %}>2. Quartal</option>
+        <option value="quartal3"  {% if filter=='quartal3' %}selected{% endif %}>3. Quartal</option>
+        <option value="quartal4"  {% if filter=='quartal4' %}selected{% endif %}>4. Quartal</option>
+        <option value="custom"    {% if filter=='custom' %}selected{% endif %}>Benutzerdefiniert</option>
+      </select>
+    </div>
+    {% if filter=='custom' %}
+    <div class="col-md-3"><label>von</label><input name="start" class="form-control" value="{{start}}"></div>
+    <div class="col-md-3"><label>bis</label><input name="end" class="form-control" value="{{end}}"></div>
+    <div class="col-md-12 mt-2"><button class="btn btn-primary" type="submit">Filtern</button></div>
+    {% endif %}
+  </form>
+
+  <!-- STATISTIK KARTEN -->
+  <div class="row gy-4">
+    {% for row in stats %}
+    <div class="col-sm-6 col-md-4">
+      <div class="card card-custom">
+        <div class="card-header card-header-custom">{{row[0]}}</div>
+        <div class="card-body">
+          <strong>Umsatz:</strong> CHF {{ "%.2f"|format(row[1]) }}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+    <div class="col-12">
+      <div class="alert alert-success mt-3">
+        <strong>Gesamtumsatz:&nbsp;CHF {{ "%.2f"|format(gesamt) }}</strong>
+      </div>
+    </div>
+  </div>
+
+  {% if user == 'admin_sebastiano' %}
+
+  <!-- LETZTE EINTRÄGE -->
+  <div class="chart-box">
+    <h6>Letzte Schichteingaben</h6>
+    <table class="table table-sm">
+      <thead><tr><th>Restaurant</th><th>Datum</th><th>Betrag [CHF]</th></tr></thead>
+      <tbody>
+        {% for r,d,b in last_entries %}<tr><td>{{r}}</td><td>{{d}}</td><td>{{ "%.2f"|format(b) }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- BAR -->
+  <div class="chart-box">
+    <h6 class="mb-3">Jahresumsatz {{jahr_selected}}</h6>
+    <canvas id="barChart"></canvas>
+  </div>
+
+  <!-- LINE -->
+  <div class="chart-box">
+    <h6 class="mb-3">Monatsentwicklung {{jahr_selected}}</h6>
+    <canvas id="lineChart"></canvas>
+  </div>
+
+  {% endif %}
+
+</div>
+
+{% if user == 'admin_sebastiano' %}
+<script>
+ const labelsBar={{ stats|map(attribute=0)|list }};
+ const dataBar  ={{ stats|map(attribute=1)|list }};
+ new Chart(document.getElementById('barChart'),{
+   type:'bar',
+   data:{labels:labelsBar,datasets:[{data:dataBar,backgroundColor:'#38a169'}]},
+   options:{indexAxis:'y',plugins:{legend:{display:false}}}
+ });
+
+ const months=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+ const monatData={{ monthly }};
+ const farben=['#2563eb','#16a34a','#cc5800','#db2777','#475569'];
+ let ds=[],i=0;
+ for(const r in monatData){ds.push({label:r,data:monatData[r],borderColor:farben[i%farben.length],fill:false,tension:0.25});i++;}
+ new Chart(document.getElementById('lineChart'),{
+   type:'line',
+   data:{labels:months,datasets:ds},
+   options:{plugins:{legend:{position:'bottom'}}}
+ });
+</script>
+{% endif %}
+</body>
+</html>

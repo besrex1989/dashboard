@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Schichtumsatz erfassen</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body{background:#f1f5f9;}
+    .card-custom{border-radius:14px;border:none;box-shadow:0 4px 10px rgba(0,0,0,0.05);}
+    .title{font-weight:600;font-size:1.25rem;}
+  </style>
+  <script>
+    function updateTotal(){
+      let ids=['küche','wein','bier','mineral','heissgetränke','spirituosen','patisserie','anderes'];
+      let t=0; ids.forEach(f=>{t+=parseFloat(document.getElementsByName(f)[0].value)||0;});
+      document.getElementById('totalDisplay').innerText=t.toFixed(2);
+      document.getElementById('totalHidden').value = t.toFixed(2);   // <-- Wert ans Backend senden
+      updateRest();
+    }
+    function updateRest(){
+      let total=parseFloat(document.getElementById('totalDisplay').innerText)||0;
+      let pays=['bar','kartenterminal','twint','amex','debitoren','eatch','reka','sonstige'];
+      let s=0; pays.forEach(p=>{s+=parseFloat(document.getElementsByName(p)[0].value)||0;});
+      document.getElementById('restDisplay').innerText=(total-s).toFixed(2);
+    }
+    function checkSubmit(){
+      const rest=parseFloat(document.getElementById('restDisplay').innerText);
+      if(rest !== 0){
+        alert("Bitte Zahlungsarten korrekt verteilen – Rest "+rest+" CHF");
+        return false;
+      }
+      return true;
+    }
+    function addFotoField(){
+      const d=document.getElementById('foto-container');
+      const input=document.createElement('input');
+      input.type="file"; input.name="fotos"; input.accept="image/*";
+      input.className="form-control mt-2";
+      d.appendChild(input);
+    }
+  </script>
+</head>
+<body>
+<div class="container py-4" style="max-width:700px;">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <a class="btn btn-outline-secondary btn-sm" href="/dashboard">&larr; Übersicht</a>
+    <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
+  </div>
+
+  <div class="card card-custom p-4">
+    <div class="title mb-3">Schichtumsatz erfassen</div>
+    <form method="post" enctype="multipart/form-data" onsubmit="return checkSubmit()" action="/form">
+      <div class="mb-3">
+        <label>Restaurant</label>
+        <select name="restaurant" class="form-select">
+         {% for r in restaurants %}<option>{{r}}</option>{% endfor %}
+        </select>
+      </div>
+
+      <div class="row g-2 mb-2">
+        {% for n in ['küche','wein','bier','mineral','heissgetränke','spirituosen','patisserie','anderes'] %}
+        <div class="col-6">
+          <label class="form-label text-capitalize">{{n}}</label>
+          <input type="number" step="0.01" name="{{n}}" class="form-control" oninput="updateTotal()">
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Hidden total for backend -->
+      <input type="hidden" name="total" id="totalHidden" value="0.00">
+
+      <div class="mb-2"><strong>Total-Umsatz:</strong> <span id="totalDisplay">0.00</span> CHF
+        &nbsp; <small class="text-muted">(Rest: <span id="restDisplay">0.00</span> CHF)</small>
+      </div>
+
+      <div class="row g-2 mb-2">
+        <div class="col-6"><label>Bar</label><input type="number" step="0.01" name="bar" class="form-control" oninput="updateRest()"></div>
+        <div class="col-6"><label>Kartenterminal</label><input type="number" step="0.01" name="kartenterminal" class="form-control" oninput="updateRest()"></div>
+        <div class="col-6"><label>Twint</label><input type="number" step="0.01" name="twint" class="form-control" oninput="updateRest()"></div>
+        <div class="col-6"><label>Amex</label><input type="number" step="0.01" name="amex" class="form-control" oninput="updateRest()"></div>
+        <div class="col-6"><label>Debitoren</label><input type="number" step="0.01" name="debitoren" class="form-control" oninput="updateRest()"></div>
+        <div class="col-6"><label>Eatch</label><input type="number" step="0.01" name="eatch" class="form-control" oninput="updateRest()"></div>
+        <div class="col-6"><label>Reka</label><input type="number" step="0.01" name="reka" class="form-control" oninput="updateRest()"></div>
+        <div class="col-6"><label>Sonstige</label><input type="number" step="0.01" name="sonstige" class="form-control" oninput="updateRest()"></div>
+      </div>
+
+      <label class="mt-2">Fotos (optional)</label>
+      <div id="foto-container">
+        <input type="file" name="fotos" class="form-control mb-2" accept="image/*">
+      </div>
+      <button type="button" class="btn btn-link p-0" onclick="addFotoField()">Weiteres Foto hinzufügen</button>
+
+      <button type="submit" class="btn btn-primary w-100 mt-3">Speichern</button>
+    </form>
+  </div>
+
+</div>
+</body>
+</html>
